@@ -7,6 +7,7 @@ import { EmployeeStats } from "@/components/employees/employee-stats"
 import { EmployeeFilters } from "@/components/employees/employee-filters"
 import { EmployeeTable } from "@/components/employees/employee-table"
 import { EmployeeDrawer } from "@/components/employees/employee-drawer"
+import { AddEmployeeModal } from "@/components/employees/add-employee-modal"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -213,16 +214,18 @@ export default function EmployeesPage() {
   const [accessGroupFilter, setAccessGroupFilter] = useState("all")
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [addModalOpen, setAddModalOpen] = useState(false)
+  const [employeeList, setEmployeeList] = useState<Employee[]>(employees)
 
   // Calculate stats
-  const totalActive = employees.filter((e) => e.syncStatus === "synced").length
-  const pendingSync = employees.filter((e) => e.syncStatus === "pending").length
-  const biometricAlerts = employees.filter(
+  const totalActive = employeeList.filter((e) => e.syncStatus === "synced").length
+  const pendingSync = employeeList.filter((e) => e.syncStatus === "pending").length
+  const biometricAlerts = employeeList.filter(
     (e) => !e.biometricStatus.hasFacePhoto || !e.biometricStatus.hasFingerprint
   ).length
 
   // Filter employees
-  const filteredEmployees = employees.filter((employee) => {
+  const filteredEmployees = employeeList.filter((employee) => {
     const matchesSearch =
       employee.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       employee.employeeId.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -246,6 +249,10 @@ export default function EmployeesPage() {
     setDrawerOpen(true)
   }
 
+  const handleAddEmployee = (newEmployee: Employee) => {
+    setEmployeeList((prev) => [newEmployee, ...prev])
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <AppSidebar />
@@ -258,7 +265,7 @@ export default function EmployeesPage() {
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-2xl font-semibold text-foreground">
-                Employes <span className="text-muted-foreground">({employees.length})</span>
+                Employes <span className="text-muted-foreground">({employeeList.length})</span>
               </h1>
               <p className="mt-1 text-sm text-muted-foreground">
                 Gestion des employes et synchronisation HikCentral
@@ -274,7 +281,7 @@ export default function EmployeesPage() {
                 <Upload className="mr-2 h-4 w-4" />
                 Importer
               </Button>
-              <Button size="sm">
+              <Button size="sm" onClick={() => setAddModalOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
                 Ajouter un employe
               </Button>
@@ -324,6 +331,13 @@ export default function EmployeesPage() {
             employee={selectedEmployee}
             open={drawerOpen}
             onOpenChange={setDrawerOpen}
+          />
+
+          {/* Add Employee Modal */}
+          <AddEmployeeModal
+            open={addModalOpen}
+            onOpenChange={setAddModalOpen}
+            onAddEmployee={handleAddEmployee}
           />
         </main>
       </div>
