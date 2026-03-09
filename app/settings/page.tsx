@@ -1,22 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { AppSidebar } from "@/components/dashboard/app-sidebar"
 import { Header } from "@/components/dashboard/header"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Switch } from "@/components/ui/switch"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -26,85 +15,222 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Bell,
+  Building,
+  CalendarDays,
+  CheckCircle2,
+  Clock,
+  DoorOpen,
+  Edit,
+  Globe,
+  Plus,
   Server,
   Shield,
-  Bell,
-  Users,
-  Clock,
-  Globe,
-  Key,
-  RefreshCcw,
-  CheckCircle2,
-  AlertTriangle,
-  Plus,
   Trash2,
-  Edit,
-  Building,
-  DoorOpen,
-  Fingerprint,
-  Mail,
-  Smartphone,
-  Lock,
-  Eye,
-  EyeOff,
+  Users,
 } from "lucide-react"
+
+type Department = {
+  id: string
+  name: string
+  manager: string
+  employeeCount: number
+}
 
 type AccessGroup = {
   id: string
   name: string
   description: string
   deviceCount: number
-  userCount: number
 }
 
-const accessGroups: AccessGroup[] = [
+type WorkSchedule = {
+  id: string
+  name: string
+  type: "Horaire" | "Quart" | "Repos"
+  startTime: string
+  endTime: string
+  workDays: string
+}
+
+type Assignment = {
+  id: string
+  scheduleId: string
+  targetType: "Departement" | "Groupe"
+  targetId: string
+}
+
+const defaultDepartments: Department[] = [
+  { id: "dep-001", name: "IT", manager: "Sarah N.", employeeCount: 34 },
+  { id: "dep-002", name: "RH", manager: "Amina K.", employeeCount: 12 },
+  { id: "dep-003", name: "Operations", manager: "Marc D.", employeeCount: 56 },
+]
+
+const defaultGroups: AccessGroup[] = [
+  { id: "grp-001", name: "Batiment A", description: "Acces general", deviceCount: 4 },
+  { id: "grp-002", name: "Salle serveur", description: "Acces restreint", deviceCount: 1 },
+  { id: "grp-003", name: "Parking", description: "Acces parking", deviceCount: 2 },
+]
+
+const defaultSchedules: WorkSchedule[] = [
   {
-    id: "grp-001",
-    name: "Building A",
-    description: "Acces general au batiment A",
-    deviceCount: 4,
-    userCount: 180,
+    id: "sch-001",
+    name: "Bureau standard",
+    type: "Horaire",
+    startTime: "09:00",
+    endTime: "18:00",
+    workDays: "Lun-Ven",
   },
   {
-    id: "grp-002",
-    name: "Server Room",
-    description: "Acces restreint - salle serveur",
-    deviceCount: 1,
-    userCount: 8,
+    id: "sch-002",
+    name: "Quart nuit",
+    type: "Quart",
+    startTime: "22:00",
+    endTime: "06:00",
+    workDays: "Lun-Sam",
   },
   {
-    id: "grp-003",
-    name: "Parking",
-    description: "Acces au parking souterrain",
-    deviceCount: 2,
-    userCount: 150,
-  },
-  {
-    id: "grp-004",
-    name: "All Floors",
-    description: "Acces a tous les etages",
-    deviceCount: 8,
-    userCount: 25,
-  },
-  {
-    id: "grp-005",
-    name: "Data Center",
-    description: "Acces haute securite - Data Center",
-    deviceCount: 1,
-    userCount: 5,
+    id: "sch-003",
+    name: "Repos weekend",
+    type: "Repos",
+    startTime: "00:00",
+    endTime: "23:59",
+    workDays: "Sam-Dim",
   },
 ]
 
+const defaultAssignments: Assignment[] = [
+  { id: "asg-001", scheduleId: "sch-001", targetType: "Departement", targetId: "dep-001" },
+  { id: "asg-002", scheduleId: "sch-002", targetType: "Groupe", targetId: "grp-002" },
+]
+
 export default function SettingsPage() {
-  const [showApiKey, setShowApiKey] = useState(false)
-  const [syncEnabled, setSyncEnabled] = useState(true)
-  const [autoEnroll, setAutoEnroll] = useState(true)
+  const [departments, setDepartments] = useState(defaultDepartments)
+  const [groups, setGroups] = useState(defaultGroups)
+  const [schedules, setSchedules] = useState(defaultSchedules)
+  const [assignments, setAssignments] = useState(defaultAssignments)
+
   const [emailNotifications, setEmailNotifications] = useState(true)
   const [pushNotifications, setPushNotifications] = useState(false)
-  const [deniedAlerts, setDeniedAlerts] = useState(true)
-  const [offlineAlerts, setOfflineAlerts] = useState(true)
-  const [newGroupOpen, setNewGroupOpen] = useState(false)
+  const [syncEnabled, setSyncEnabled] = useState(true)
+
+  const [depDialogOpen, setDepDialogOpen] = useState(false)
+  const [editingDepartment, setEditingDepartment] = useState<Department | null>(null)
+  const [depForm, setDepForm] = useState({ name: "", manager: "", employeeCount: "0" })
+
+  const [groupDialogOpen, setGroupDialogOpen] = useState(false)
+  const [editingGroup, setEditingGroup] = useState<AccessGroup | null>(null)
+  const [groupForm, setGroupForm] = useState({ name: "", description: "", deviceCount: "0" })
+
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false)
+  const [editingSchedule, setEditingSchedule] = useState<WorkSchedule | null>(null)
+  const [scheduleForm, setScheduleForm] = useState<{
+    name: string
+    type: WorkSchedule["type"]
+    startTime: string
+    endTime: string
+    workDays: string
+  }>({ name: "", type: "Horaire", startTime: "09:00", endTime: "18:00", workDays: "Lun-Ven" })
+
+  const [assignmentForm, setAssignmentForm] = useState({
+    scheduleId: defaultSchedules[0].id,
+    targetType: "Departement" as Assignment["targetType"],
+    targetId: defaultDepartments[0].id,
+  })
+
+  const availableTargets = useMemo(() => {
+    return assignmentForm.targetType === "Departement" ? departments : groups
+  }, [assignmentForm.targetType, departments, groups])
+
+  const resetDepartmentForm = () => setDepForm({ name: "", manager: "", employeeCount: "0" })
+  const resetGroupForm = () => setGroupForm({ name: "", description: "", deviceCount: "0" })
+  const resetScheduleForm = () =>
+    setScheduleForm({ name: "", type: "Horaire", startTime: "09:00", endTime: "18:00", workDays: "Lun-Ven" })
+
+  const submitDepartment = () => {
+    const payload: Department = {
+      id: editingDepartment?.id ?? `dep-${Date.now()}`,
+      name: depForm.name,
+      manager: depForm.manager,
+      employeeCount: Number(depForm.employeeCount || 0),
+    }
+
+    setDepartments((prev) =>
+      editingDepartment ? prev.map((dep) => (dep.id === payload.id ? payload : dep)) : [...prev, payload]
+    )
+
+    setDepDialogOpen(false)
+    setEditingDepartment(null)
+    resetDepartmentForm()
+  }
+
+  const submitGroup = () => {
+    const payload: AccessGroup = {
+      id: editingGroup?.id ?? `grp-${Date.now()}`,
+      name: groupForm.name,
+      description: groupForm.description,
+      deviceCount: Number(groupForm.deviceCount || 0),
+    }
+
+    setGroups((prev) =>
+      editingGroup ? prev.map((group) => (group.id === payload.id ? payload : group)) : [...prev, payload]
+    )
+
+    setGroupDialogOpen(false)
+    setEditingGroup(null)
+    resetGroupForm()
+  }
+
+  const submitSchedule = () => {
+    const payload: WorkSchedule = {
+      id: editingSchedule?.id ?? `sch-${Date.now()}`,
+      name: scheduleForm.name,
+      type: scheduleForm.type,
+      startTime: scheduleForm.startTime,
+      endTime: scheduleForm.endTime,
+      workDays: scheduleForm.workDays,
+    }
+
+    setSchedules((prev) =>
+      editingSchedule ? prev.map((schedule) => (schedule.id === payload.id ? payload : schedule)) : [...prev, payload]
+    )
+
+    setScheduleDialogOpen(false)
+    setEditingSchedule(null)
+    resetScheduleForm()
+  }
+
+  const deleteDepartment = (id: string) => {
+    setDepartments((prev) => prev.filter((dep) => dep.id !== id))
+    setAssignments((prev) => prev.filter((asgn) => !(asgn.targetType === "Departement" && asgn.targetId === id)))
+  }
+
+  const deleteGroup = (id: string) => {
+    setGroups((prev) => prev.filter((group) => group.id !== id))
+    setAssignments((prev) => prev.filter((asgn) => !(asgn.targetType === "Groupe" && asgn.targetId === id)))
+  }
+
+  const deleteSchedule = (id: string) => {
+    setSchedules((prev) => prev.filter((schedule) => schedule.id !== id))
+    setAssignments((prev) => prev.filter((asgn) => asgn.scheduleId !== id))
+  }
+
+  const addAssignment = () => {
+    if (!assignmentForm.scheduleId || !assignmentForm.targetId) return
+    setAssignments((prev) => [...prev, { id: `asg-${Date.now()}`, ...assignmentForm }])
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -114,23 +240,24 @@ export default function SettingsPage() {
         <Header systemStatus="connected" />
 
         <main className="p-6">
-          {/* Page Header */}
           <div className="mb-6">
             <h1 className="text-2xl font-semibold text-foreground">Parametres</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Configuration du systeme et integration HikCentral
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">Configuration globale du systeme</p>
           </div>
 
-          <Tabs defaultValue="hikcentral" className="space-y-6">
+          <Tabs defaultValue="organization" className="space-y-6">
             <TabsList className="flex-wrap">
+              <TabsTrigger value="organization">
+                <Users className="mr-2 h-4 w-4" />
+                Organisation
+              </TabsTrigger>
+              <TabsTrigger value="planning">
+                <CalendarDays className="mr-2 h-4 w-4" />
+                Horaires & Plannings
+              </TabsTrigger>
               <TabsTrigger value="hikcentral">
                 <Server className="mr-2 h-4 w-4" />
                 HikCentral
-              </TabsTrigger>
-              <TabsTrigger value="access-groups">
-                <DoorOpen className="mr-2 h-4 w-4" />
-                Groupes d&apos;acces
               </TabsTrigger>
               <TabsTrigger value="security">
                 <Shield className="mr-2 h-4 w-4" />
@@ -146,614 +273,312 @@ export default function SettingsPage() {
               </TabsTrigger>
             </TabsList>
 
-            {/* HikCentral Integration Tab */}
-            <TabsContent value="hikcentral" className="space-y-6">
-              {/* Connection Status */}
-              <Card className="border-border bg-card">
+            <TabsContent value="organization" className="space-y-6">
+              <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <div>
-                      <CardTitle className="text-base">Etat de la Connexion</CardTitle>
-                      <CardDescription>
-                        Connexion au serveur HikCentral Professional
-                      </CardDescription>
+                      <CardTitle className="text-base">Departements</CardTitle>
+                      <CardDescription>Ajout, modification et suppression des departements</CardDescription>
                     </div>
-                    <Badge className="bg-green-500/10 text-green-500">
-                      <CheckCircle2 className="mr-1 h-3 w-3" />
-                      Connecte
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between rounded-lg border border-border p-4">
-                    <div className="flex items-center gap-3">
-                      <Server className="h-5 w-5 text-primary" />
-                      <div>
-                        <p className="font-medium">HikCentral Professional v3.2.0</p>
-                        <p className="text-sm text-muted-foreground">
-                          hikcentral.company.local:8443
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-muted-foreground">Derniere sync</p>
-                      <p className="text-sm font-medium">Il y a 2 minutes</p>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <div className="rounded-lg border border-border p-3 text-center">
-                      <p className="text-2xl font-semibold text-foreground">256</p>
-                      <p className="text-sm text-muted-foreground">Employes syncronises</p>
-                    </div>
-                    <div className="rounded-lg border border-border p-3 text-center">
-                      <p className="text-2xl font-semibold text-foreground">12</p>
-                      <p className="text-sm text-muted-foreground">Appareils connectes</p>
-                    </div>
-                    <div className="rounded-lg border border-border p-3 text-center">
-                      <p className="text-2xl font-semibold text-foreground">5</p>
-                      <p className="text-sm text-muted-foreground">Groupes d&apos;acces</p>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline">
-                      <RefreshCcw className="mr-2 h-4 w-4" />
-                      Synchroniser maintenant
-                    </Button>
-                    <Button variant="outline">Tester la connexion</Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* API Configuration */}
-              <Card className="border-border bg-card">
-                <CardHeader>
-                  <CardTitle className="text-base">Configuration API</CardTitle>
-                  <CardDescription>
-                    Parametres de connexion a l&apos;API HikCentral
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="server-url">URL du serveur</Label>
-                      <Input
-                        id="server-url"
-                        defaultValue="https://hikcentral.company.local:8443"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="api-version">Version API</Label>
-                      <Select defaultValue="v2">
-                        <SelectTrigger id="api-version">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="v1">API v1 (Legacy)</SelectItem>
-                          <SelectItem value="v2">API v2 (Recommande)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="api-key">Cle API</Label>
-                      <div className="relative">
-                        <Input
-                          id="api-key"
-                          type={showApiKey ? "text" : "password"}
-                          defaultValue="hcp_xxxxxxxxxxxxxxxxxxxxxxxxxx"
-                        />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2"
-                          onClick={() => setShowApiKey(!showApiKey)}
-                        >
-                          {showApiKey ? (
-                            <EyeOff className="h-4 w-4" />
-                          ) : (
-                            <Eye className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="api-secret">Secret API</Label>
-                      <div className="relative">
-                        <Input id="api-secret" type="password" defaultValue="••••••••••••" />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end">
-                    <Button>
-                      <Key className="mr-2 h-4 w-4" />
-                      Sauvegarder les identifiants
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Sync Settings */}
-              <Card className="border-border bg-card">
-                <CardHeader>
-                  <CardTitle className="text-base">Parametres de Synchronisation</CardTitle>
-                  <CardDescription>
-                    Configuration de la synchronisation automatique
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between rounded-lg border border-border p-4">
-                    <div className="flex items-center gap-3">
-                      <RefreshCcw className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">Synchronisation automatique</p>
-                        <p className="text-sm text-muted-foreground">
-                          Synchroniser les donnees toutes les 5 minutes
-                        </p>
-                      </div>
-                    </div>
-                    <Switch checked={syncEnabled} onCheckedChange={setSyncEnabled} />
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-lg border border-border p-4">
-                    <div className="flex items-center gap-3">
-                      <Users className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">Enrolement automatique</p>
-                        <p className="text-sm text-muted-foreground">
-                          Creer automatiquement les employes dans HikCentral
-                        </p>
-                      </div>
-                    </div>
-                    <Switch checked={autoEnroll} onCheckedChange={setAutoEnroll} />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Intervalle de synchronisation</Label>
-                    <Select defaultValue="5">
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="1">Toutes les minutes</SelectItem>
-                        <SelectItem value="5">Toutes les 5 minutes</SelectItem>
-                        <SelectItem value="15">Toutes les 15 minutes</SelectItem>
-                        <SelectItem value="30">Toutes les 30 minutes</SelectItem>
-                        <SelectItem value="60">Toutes les heures</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Access Groups Tab */}
-            <TabsContent value="access-groups" className="space-y-6">
-              <Card className="border-border bg-card">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-base">Groupes d&apos;Acces</CardTitle>
-                      <CardDescription>
-                        Gerez les zones et permissions d&apos;acces
-                      </CardDescription>
-                    </div>
-                    <Dialog open={newGroupOpen} onOpenChange={setNewGroupOpen}>
+                    <Dialog open={depDialogOpen} onOpenChange={setDepDialogOpen}>
                       <DialogTrigger asChild>
-                        <Button size="sm">
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setEditingDepartment(null)
+                            resetDepartmentForm()
+                          }}
+                        >
                           <Plus className="mr-2 h-4 w-4" />
-                          Nouveau groupe
+                          Nouveau departement
                         </Button>
                       </DialogTrigger>
                       <DialogContent>
                         <DialogHeader>
-                          <DialogTitle>Creer un groupe d&apos;acces</DialogTitle>
-                          <DialogDescription>
-                            Definissez un nouveau groupe d&apos;acces avec ses appareils associes
-                          </DialogDescription>
+                          <DialogTitle>{editingDepartment ? "Modifier" : "Creer"} un departement</DialogTitle>
+                          <DialogDescription>Renseignez les informations du departement.</DialogDescription>
                         </DialogHeader>
                         <div className="space-y-4 py-4">
                           <div className="space-y-2">
-                            <Label htmlFor="group-name">Nom du groupe</Label>
-                            <Input id="group-name" placeholder="ex: Bureau Direction" />
+                            <Label>Nom</Label>
+                            <Input value={depForm.name} onChange={(e) => setDepForm((p) => ({ ...p, name: e.target.value }))} />
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="group-desc">Description</Label>
-                            <Input
-                              id="group-desc"
-                              placeholder="Description du groupe d'acces"
-                            />
+                            <Label>Responsable</Label>
+                            <Input value={depForm.manager} onChange={(e) => setDepForm((p) => ({ ...p, manager: e.target.value }))} />
                           </div>
                           <div className="space-y-2">
-                            <Label>Appareils associes</Label>
-                            <div className="grid gap-2">
-                              {["Main Entrance A", "Main Entrance B", "Floor 2 Access"].map(
-                                (device) => (
-                                  <label
-                                    key={device}
-                                    className="flex items-center gap-2 rounded-lg border border-border p-3 cursor-pointer hover:bg-muted/50"
-                                  >
-                                    <input type="checkbox" className="rounded" />
-                                    <span className="text-sm">{device}</span>
-                                  </label>
-                                )
-                              )}
-                            </div>
+                            <Label>Nombre d'employes</Label>
+                            <Input type="number" value={depForm.employeeCount} onChange={(e) => setDepForm((p) => ({ ...p, employeeCount: e.target.value }))} />
                           </div>
                         </div>
                         <DialogFooter>
-                          <Button variant="outline" onClick={() => setNewGroupOpen(false)}>
-                            Annuler
-                          </Button>
-                          <Button onClick={() => setNewGroupOpen(false)}>Creer</Button>
+                          <Button variant="outline" onClick={() => setDepDialogOpen(false)}>Annuler</Button>
+                          <Button onClick={submitDepartment}>Enregistrer</Button>
                         </DialogFooter>
                       </DialogContent>
                     </Dialog>
                   </div>
                 </CardHeader>
+                <CardContent className="space-y-3">
+                  {departments.map((dep) => (
+                    <div key={dep.id} className="flex items-center justify-between rounded-lg border p-4">
+                      <div className="flex items-center gap-3">
+                        <Building className="h-5 w-5 text-primary" />
+                        <div>
+                          <p className="font-medium">{dep.name}</p>
+                          <p className="text-xs text-muted-foreground">Manager: {dep.manager} • {dep.employeeCount} employes</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="icon" onClick={() => {
+                          setEditingDepartment(dep)
+                          setDepForm({ name: dep.name, manager: dep.manager, employeeCount: String(dep.employeeCount) })
+                          setDepDialogOpen(true)
+                        }}><Edit className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => deleteDepartment(dep.id)}><Trash2 className="h-4 w-4" /></Button>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base">Groupes d'acces</CardTitle>
+                      <CardDescription>Ajout, modification et suppression des groupes</CardDescription>
+                    </div>
+                    <Dialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setEditingGroup(null)
+                            resetGroupForm()
+                          }}
+                        >
+                          <DoorOpen className="mr-2 h-4 w-4" />
+                          Nouveau groupe
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>{editingGroup ? "Modifier" : "Creer"} un groupe</DialogTitle>
+                          <DialogDescription>Definissez la zone et le volume d'appareils.</DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="space-y-2"><Label>Nom</Label><Input value={groupForm.name} onChange={(e) => setGroupForm((p) => ({ ...p, name: e.target.value }))} /></div>
+                          <div className="space-y-2"><Label>Description</Label><Input value={groupForm.description} onChange={(e) => setGroupForm((p) => ({ ...p, description: e.target.value }))} /></div>
+                          <div className="space-y-2"><Label>Nombre d'appareils</Label><Input type="number" value={groupForm.deviceCount} onChange={(e) => setGroupForm((p) => ({ ...p, deviceCount: e.target.value }))} /></div>
+                        </div>
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setGroupDialogOpen(false)}>Annuler</Button>
+                          <Button onClick={submitGroup}>Enregistrer</Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {groups.map((group) => (
+                    <div key={group.id} className="flex items-center justify-between rounded-lg border p-4">
+                      <div>
+                        <p className="font-medium">{group.name}</p>
+                        <p className="text-xs text-muted-foreground">{group.description} • {group.deviceCount} appareils</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="icon" onClick={() => {
+                          setEditingGroup(group)
+                          setGroupForm({ name: group.name, description: group.description, deviceCount: String(group.deviceCount) })
+                          setGroupDialogOpen(true)
+                        }}><Edit className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => deleteGroup(group.id)}><Trash2 className="h-4 w-4" /></Button>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="planning" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base">Horaires, repos et quarts</CardTitle>
+                      <CardDescription>Definition des plages de travail et types de planning</CardDescription>
+                    </div>
+                    <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button size="sm" onClick={() => { setEditingSchedule(null); resetScheduleForm() }}>
+                          <Plus className="mr-2 h-4 w-4" />
+                          Nouveau planning
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>{editingSchedule ? "Modifier" : "Creer"} un planning</DialogTitle>
+                          <DialogDescription>Configurez un horaire de travail, un quart ou un repos.</DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="space-y-2"><Label>Nom</Label><Input value={scheduleForm.name} onChange={(e) => setScheduleForm((p) => ({ ...p, name: e.target.value }))} /></div>
+                          <div className="space-y-2">
+                            <Label>Type</Label>
+                            <Select value={scheduleForm.type} onValueChange={(value: WorkSchedule["type"]) => setScheduleForm((p) => ({ ...p, type: value }))}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Horaire">Horaire</SelectItem>
+                                <SelectItem value="Quart">Quart</SelectItem>
+                                <SelectItem value="Repos">Repos</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2"><Label>Debut</Label><Input type="time" value={scheduleForm.startTime} onChange={(e) => setScheduleForm((p) => ({ ...p, startTime: e.target.value }))} /></div>
+                            <div className="space-y-2"><Label>Fin</Label><Input type="time" value={scheduleForm.endTime} onChange={(e) => setScheduleForm((p) => ({ ...p, endTime: e.target.value }))} /></div>
+                          </div>
+                          <div className="space-y-2"><Label>Jours</Label><Input value={scheduleForm.workDays} onChange={(e) => setScheduleForm((p) => ({ ...p, workDays: e.target.value }))} placeholder="ex: Lun-Ven" /></div>
+                        </div>
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setScheduleDialogOpen(false)}>Annuler</Button>
+                          <Button onClick={submitSchedule}>Enregistrer</Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {schedules.map((schedule) => (
+                    <div key={schedule.id} className="flex items-center justify-between rounded-lg border p-4">
+                      <div>
+                        <p className="font-medium">{schedule.name} <Badge variant="secondary">{schedule.type}</Badge></p>
+                        <p className="text-xs text-muted-foreground">{schedule.startTime} - {schedule.endTime} • {schedule.workDays}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="icon" onClick={() => {
+                          setEditingSchedule(schedule)
+                          setScheduleForm({ name: schedule.name, type: schedule.type, startTime: schedule.startTime, endTime: schedule.endTime, workDays: schedule.workDays })
+                          setScheduleDialogOpen(true)
+                        }}><Edit className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => deleteSchedule(schedule.id)}><Trash2 className="h-4 w-4" /></Button>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Attribution des plannings</CardTitle>
+                  <CardDescription>Affectez un planning a un departement ou un groupe</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-3 md:grid-cols-4">
+                    <Select value={assignmentForm.scheduleId} onValueChange={(v) => setAssignmentForm((p) => ({ ...p, scheduleId: v }))}>
+                      <SelectTrigger><SelectValue placeholder="Planning" /></SelectTrigger>
+                      <SelectContent>{schedules.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Select value={assignmentForm.targetType} onValueChange={(v: Assignment["targetType"]) => setAssignmentForm((p) => ({ ...p, targetType: v, targetId: "" }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Departement">Departement</SelectItem>
+                        <SelectItem value="Groupe">Groupe</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={assignmentForm.targetId} onValueChange={(v) => setAssignmentForm((p) => ({ ...p, targetId: v }))}>
+                      <SelectTrigger><SelectValue placeholder="Selectionner" /></SelectTrigger>
+                      <SelectContent>
+                        {availableTargets.map((target) => (
+                          <SelectItem key={target.id} value={target.id}>{target.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button onClick={addAssignment}>Attribuer</Button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {assignments.map((asgn) => {
+                      const schedule = schedules.find((s) => s.id === asgn.scheduleId)
+                      const target = asgn.targetType === "Departement" ? departments.find((d) => d.id === asgn.targetId) : groups.find((g) => g.id === asgn.targetId)
+                      return (
+                        <div key={asgn.id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
+                          <p>
+                            <span className="font-medium">{schedule?.name ?? "Planning supprime"}</span> → {asgn.targetType}: {target?.name ?? "Cible supprimee"}
+                          </p>
+                          <Button variant="ghost" size="icon" className="text-destructive" onClick={() => setAssignments((prev) => prev.filter((a) => a.id !== asgn.id))}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="hikcentral" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base">Etat de la connexion</CardTitle>
+                      <CardDescription>Connexion au serveur HikCentral Professional</CardDescription>
+                    </div>
+                    <Badge className="bg-green-500/10 text-green-500"><CheckCircle2 className="mr-1 h-3 w-3" />Connecte</Badge>
+                  </div>
+                </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    {accessGroups.map((group) => (
-                      <div
-                        key={group.id}
-                        className="flex items-center justify-between rounded-lg border border-border p-4 transition-colors hover:bg-muted/50"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                            <Building className="h-5 w-5 text-primary" />
-                          </div>
-                          <div>
-                            <h4 className="font-medium text-foreground">{group.name}</h4>
-                            <p className="text-sm text-muted-foreground">{group.description}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-6">
-                          <div className="text-center">
-                            <p className="text-sm font-medium">{group.deviceCount}</p>
-                            <p className="text-xs text-muted-foreground">Appareils</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-sm font-medium">{group.userCount}</p>
-                            <p className="text-xs text-muted-foreground">Utilisateurs</p>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="flex items-center justify-between rounded-lg border p-4">
+                    <p className="text-sm">Synchronisation active toutes les 5 minutes.</p>
+                    <Switch checked={syncEnabled} onCheckedChange={setSyncEnabled} />
                   </div>
                 </CardContent>
               </Card>
             </TabsContent>
 
-            {/* Security Tab */}
             <TabsContent value="security" className="space-y-6">
-              <Card className="border-border bg-card">
+              <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Authentification Biometrique</CardTitle>
-                  <CardDescription>
-                    Parametres de reconnaissance faciale et empreintes digitales
-                  </CardDescription>
+                  <CardTitle className="text-base">Politique d'acces</CardTitle>
+                  <CardDescription>Regles de securite globales</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between rounded-lg border border-border p-4">
-                    <div className="flex items-center gap-3">
-                      <Fingerprint className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">Reconnaissance faciale obligatoire</p>
-                        <p className="text-sm text-muted-foreground">
-                          Exiger une photo faciale pour tous les employes
-                        </p>
-                      </div>
+                <CardContent>
+                  <div className="flex items-center justify-between rounded-lg border p-4">
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <p className="text-sm">Restriction horaire en dehors de 06:00 - 22:00</p>
                     </div>
                     <Switch defaultChecked />
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-lg border border-border p-4">
-                    <div className="flex items-center gap-3">
-                      <Lock className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">Double authentification (zones sensibles)</p>
-                        <p className="text-sm text-muted-foreground">
-                          Carte + biometrie pour Server Room et Data Center
-                        </p>
-                      </div>
-                    </div>
-                    <Switch defaultChecked />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Seuil de confiance reconnaissance faciale</Label>
-                    <Select defaultValue="85">
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="70">70% (Faible)</SelectItem>
-                        <SelectItem value="85">85% (Recommande)</SelectItem>
-                        <SelectItem value="95">95% (Strict)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-border bg-card">
-                <CardHeader>
-                  <CardTitle className="text-base">Politique d&apos;Acces</CardTitle>
-                  <CardDescription>
-                    Regles de controle d&apos;acces globales
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Delai de verrouillage apres echecs</Label>
-                      <Select defaultValue="3">
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="3">3 tentatives</SelectItem>
-                          <SelectItem value="5">5 tentatives</SelectItem>
-                          <SelectItem value="10">10 tentatives</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Duree du verrouillage</Label>
-                      <Select defaultValue="30">
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="5">5 minutes</SelectItem>
-                          <SelectItem value="15">15 minutes</SelectItem>
-                          <SelectItem value="30">30 minutes</SelectItem>
-                          <SelectItem value="60">1 heure</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-lg border border-border p-4">
-                    <div className="flex items-center gap-3">
-                      <Clock className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">Restriction horaire</p>
-                        <p className="text-sm text-muted-foreground">
-                          Limiter les acces en dehors des heures de bureau (6h-22h)
-                        </p>
-                      </div>
-                    </div>
-                    <Switch />
                   </div>
                 </CardContent>
               </Card>
             </TabsContent>
 
-            {/* Notifications Tab */}
             <TabsContent value="notifications" className="space-y-6">
-              <Card className="border-border bg-card">
+              <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Canaux de Notification</CardTitle>
-                  <CardDescription>
-                    Configurez comment recevoir les alertes
-                  </CardDescription>
+                  <CardTitle className="text-base">Canaux de notification</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between rounded-lg border border-border p-4">
-                    <div className="flex items-center gap-3">
-                      <Mail className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">Notifications par email</p>
-                        <p className="text-sm text-muted-foreground">
-                          Recevoir les alertes par email
-                        </p>
-                      </div>
-                    </div>
-                    <Switch checked={emailNotifications} onCheckedChange={setEmailNotifications} />
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-lg border border-border p-4">
-                    <div className="flex items-center gap-3">
-                      <Smartphone className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">Notifications push</p>
-                        <p className="text-sm text-muted-foreground">
-                          Notifications sur l&apos;application mobile
-                        </p>
-                      </div>
-                    </div>
-                    <Switch checked={pushNotifications} onCheckedChange={setPushNotifications} />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-border bg-card">
-                <CardHeader>
-                  <CardTitle className="text-base">Types d&apos;Alertes</CardTitle>
-                  <CardDescription>
-                    Selectionnez les evenements qui declenchent des notifications
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between rounded-lg border border-border p-4">
-                    <div className="flex items-center gap-3">
-                      <AlertTriangle className="h-5 w-5 text-amber-500" />
-                      <div>
-                        <p className="font-medium">Acces refuses</p>
-                        <p className="text-sm text-muted-foreground">
-                          Alertes pour les tentatives d&apos;acces non autorisees
-                        </p>
-                      </div>
-                    </div>
-                    <Switch checked={deniedAlerts} onCheckedChange={setDeniedAlerts} />
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-lg border border-border p-4">
-                    <div className="flex items-center gap-3">
-                      <Server className="h-5 w-5 text-red-500" />
-                      <div>
-                        <p className="font-medium">Appareils hors ligne</p>
-                        <p className="text-sm text-muted-foreground">
-                          Alertes lorsqu&apos;un controleur perd la connexion
-                        </p>
-                      </div>
-                    </div>
-                    <Switch checked={offlineAlerts} onCheckedChange={setOfflineAlerts} />
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-lg border border-border p-4">
-                    <div className="flex items-center gap-3">
-                      <Fingerprint className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">Biometrie manquante</p>
-                        <p className="text-sm text-muted-foreground">
-                          Rappel pour les employes sans photo faciale
-                        </p>
-                      </div>
-                    </div>
-                    <Switch />
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-lg border border-border p-4">
-                    <div className="flex items-center gap-3">
-                      <RefreshCcw className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">Echecs de synchronisation</p>
-                        <p className="text-sm text-muted-foreground">
-                          Alertes en cas d&apos;erreur de sync HikCentral
-                        </p>
-                      </div>
-                    </div>
-                    <Switch defaultChecked />
-                  </div>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center justify-between rounded-lg border p-4"><p>Email</p><Switch checked={emailNotifications} onCheckedChange={setEmailNotifications} /></div>
+                  <div className="flex items-center justify-between rounded-lg border p-4"><p>Push mobile</p><Switch checked={pushNotifications} onCheckedChange={setPushNotifications} /></div>
                 </CardContent>
               </Card>
             </TabsContent>
 
-            {/* General Tab */}
             <TabsContent value="general" className="space-y-6">
-              <Card className="border-border bg-card">
+              <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Informations de l&apos;Entreprise</CardTitle>
-                  <CardDescription>
-                    Parametres generaux de votre organisation
-                  </CardDescription>
+                  <CardTitle className="text-base">Informations entreprise</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="company-name">Nom de l&apos;entreprise</Label>
-                      <Input id="company-name" defaultValue="TechCorp Industries" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="timezone">Fuseau horaire</Label>
-                      <Select defaultValue="europe-paris">
-                        <SelectTrigger id="timezone">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="europe-paris">Europe/Paris (UTC+1)</SelectItem>
-                          <SelectItem value="europe-london">Europe/London (UTC)</SelectItem>
-                          <SelectItem value="america-new-york">America/New_York (UTC-5)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="work-start">Heure de debut de journee</Label>
-                      <Input id="work-start" type="time" defaultValue="09:00" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="work-end">Heure de fin de journee</Label>
-                      <Input id="work-end" type="time" defaultValue="18:00" />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Tolerance retard (minutes)</Label>
-                    <Select defaultValue="15">
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="5">5 minutes</SelectItem>
-                        <SelectItem value="10">10 minutes</SelectItem>
-                        <SelectItem value="15">15 minutes</SelectItem>
-                        <SelectItem value="30">30 minutes</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <CardContent className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2"><Label>Nom de l'entreprise</Label><Input defaultValue="TechCorp Industries" /></div>
+                  <div className="space-y-2"><Label>Fuseau horaire</Label><Input defaultValue="Europe/Paris" /></div>
                 </CardContent>
               </Card>
-
-              <Card className="border-border bg-card">
-                <CardHeader>
-                  <CardTitle className="text-base">Langue et Format</CardTitle>
-                  <CardDescription>
-                    Preferences d&apos;affichage
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Langue</Label>
-                      <Select defaultValue="fr">
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="fr">Francais</SelectItem>
-                          <SelectItem value="en">English</SelectItem>
-                          <SelectItem value="es">Espanol</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Format de date</Label>
-                      <Select defaultValue="dd-mm-yyyy">
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="dd-mm-yyyy">DD/MM/YYYY</SelectItem>
-                          <SelectItem value="mm-dd-yyyy">MM/DD/YYYY</SelectItem>
-                          <SelectItem value="yyyy-mm-dd">YYYY-MM-DD</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <div className="flex justify-end">
-                <Button>Sauvegarder les parametres</Button>
-              </div>
             </TabsContent>
           </Tabs>
         </main>
