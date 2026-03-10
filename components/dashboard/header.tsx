@@ -13,12 +13,16 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Search, Plus, Bell, Wifi, WifiOff } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useRouter } from "next/navigation"
 
 interface HeaderProps {
   systemStatus: "connected" | "disconnected" | "syncing"
+  onAddUser?: () => void
 }
 
-export function Header({ systemStatus }: HeaderProps) {
+export function Header({ systemStatus, onAddUser }: HeaderProps) {
+  const router = useRouter()
+
   const statusConfig = {
     connected: {
       label: "API Connected",
@@ -42,6 +46,15 @@ export function Header({ systemStatus }: HeaderProps) {
 
   const status = statusConfig[systemStatus]
   const StatusIcon = status.icon
+
+  const handleAddUser = () => {
+    if (onAddUser) {
+      onAddUser()
+      return
+    }
+
+    router.push("/employees")
+  }
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -71,7 +84,11 @@ export function Header({ systemStatus }: HeaderProps) {
         </div>
 
         {/* Add User Button */}
-        <Button size="sm" className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90">
+        <Button
+          size="sm"
+          className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
+          onClick={handleAddUser}
+        >
           <Plus className="h-4 w-4" />
           <span className="hidden sm:inline">Add User</span>
         </Button>

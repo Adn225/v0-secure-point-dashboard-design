@@ -277,7 +277,10 @@ export default function EmployeesPage() {
       <AppSidebar />
 
       <div className="pl-16 lg:pl-64">
-        <Header systemStatus="connected" />
+        <Header systemStatus="connected" onAddUser={() => {
+            setEditingEmployee(null)
+            setAddModalOpen(true)
+          }} />
 
         <main className="p-6">
           {/* Page Header */}
