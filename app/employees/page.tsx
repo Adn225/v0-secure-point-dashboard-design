@@ -11,6 +11,12 @@ import { AddEmployeeModal } from "@/components/employees/add-employee-modal"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
   Search,
   Download,
   Upload,
@@ -219,6 +225,25 @@ export default function EmployeesPage() {
   const [employeeList, setEmployeeList] = useState<Employee[]>(employees)
   const importInputRef = useRef<HTMLInputElement>(null)
 
+  const employeeExportHeaders = [
+    "employeeId",
+    "name",
+    "email",
+    "phone",
+    "department",
+    "position",
+    "cardNumber",
+    "accessGroups",
+    "syncStatus",
+    "hasFacePhoto",
+    "hasFingerprint",
+    "hireDate",
+    "lastAccess",
+  ] as const
+
+  type ExportHeader = (typeof employeeExportHeaders)[number]
+  type EmployeeExportRow = Record<ExportHeader, string>
+
   // Calculate stats
   const totalActive = employeeList.filter((e) => e.syncStatus === "synced").length
   const pendingSync = employeeList.filter((e) => e.syncStatus === "pending").length
@@ -307,44 +332,29 @@ export default function EmployeesPage() {
     return value
   }
 
-  const handleExport = () => {
-    const headers = [
-      "employeeId",
-      "name",
-      "email",
-      "phone",
-      "department",
-      "position",
-      "cardNumber",
-      "accessGroups",
-      "syncStatus",
-      "hasFacePhoto",
-      "hasFingerprint",
-      "hireDate",
-      "lastAccess",
-    ]
+  const employeeToRow = (employee: Employee): EmployeeExportRow => ({
+    employeeId: employee.employeeId,
+    name: employee.name,
+    email: employee.email,
+    phone: employee.phone,
+    department: employee.department,
+    position: employee.position,
+    cardNumber: employee.cardNumber,
+    accessGroups: employee.accessGroups.join("|"),
+    syncStatus: employee.syncStatus,
+    hasFacePhoto: String(employee.biometricStatus.hasFacePhoto),
+    hasFingerprint: String(employee.biometricStatus.hasFingerprint),
+    hireDate: employee.hireDate,
+    lastAccess: employee.lastAccess,
+  })
 
-    const rows = filteredEmployees.map((employee) =>
-      [
-        employee.employeeId,
-        employee.name,
-        employee.email,
-        employee.phone,
-        employee.department,
-        employee.position,
-        employee.cardNumber,
-        employee.accessGroups.join("|"),
-        employee.syncStatus,
-        String(employee.biometricStatus.hasFacePhoto),
-        String(employee.biometricStatus.hasFingerprint),
-        employee.hireDate,
-        employee.lastAccess,
-      ]
-        .map((value) => csvEscape(value))
-        .join(",")
-    )
+  const exportToCsv = () => {
+    const rows = filteredEmployees.map((employee) => {
+      const formatted = employeeToRow(employee)
+      return employeeExportHeaders.map((header) => csvEscape(formatted[header as ExportHeader])).join(",")
+    })
 
-    const csv = [headers.join(","), ...rows].join("\n")
+    const csv = [employeeExportHeaders.join(","), ...rows].join("\n")
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement("a")
@@ -354,6 +364,80 @@ export default function EmployeesPage() {
     link.click()
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
+  }
+
+  const exportToExcel = () => {
+    const rows = filteredEmployees.map((employee) => {
+      const formatted = employeeToRow(employee)
+      return employeeExportHeaders.map((header) => formatted[header as ExportHeader]).join("	")
+    })
+
+    const excelContent = [employeeExportHeaders.join("	"), ...rows].join("\n")
+    const blob = new Blob([excelContent], { type: "application/vnd.ms-excel;charset=utf-8;" })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = "employees.xls"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  }
+
+  const exportToPdf = () => {
+    const printWindow = window.open("", "_blank")
+
+    if (!printWindow) {
+      return
+    }
+
+    const rows = filteredEmployees
+      .map(
+        (employee) =>
+          `<tr><td>${employee.employeeId}</td><td>${employee.name}</td><td>${employee.department}</td><td>${employee.position}</td><td>${employee.email}</td></tr>`
+      )
+      .join("")
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Rapport Employes</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; }
+            table { border-collapse: collapse; width: 100%; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f5f5f5; }
+          </style>
+        </head>
+        <body>
+          <h2>Rapport Employes</h2>
+          <p>Genere le ${new Date().toLocaleString()}</p>
+          <table>
+            <thead>
+              <tr><th>Matricule</th><th>Nom</th><th>Departement</th><th>Poste</th><th>Email</th></tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </body>
+      </html>
+    `)
+    printWindow.document.close()
+    printWindow.focus()
+    printWindow.print()
+  }
+
+  const handleExport = (format: "csv" | "excel" | "pdf") => {
+    if (format === "csv") {
+      exportToCsv()
+      return
+    }
+
+    if (format === "excel") {
+      exportToExcel()
+      return
+    }
+
+    exportToPdf()
   }
 
   const handleImport = () => {
@@ -367,8 +451,8 @@ export default function EmployeesPage() {
       return
     }
 
-    const csvContent = await file.text()
-    const lines = csvContent
+    const fileContent = await file.text()
+    const lines = fileContent
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean)
@@ -378,12 +462,15 @@ export default function EmployeesPage() {
       return
     }
 
-    const headers = parseCsvLine(lines[0])
-    const rows = lines.slice(1)
+    const separator = lines[0].includes("	") ? "	" : ","
+    const parseLine = (line: string) =>
+      separator === "	" ? line.split("	") : parseCsvLine(line)
+
+    const headers = parseLine(lines[0]).map((header) => header.trim())
+    const rows = lines.slice(1).map((line) => parseLine(line).map((value) => value.trim()))
 
     const importedEmployees = rows
-      .map((line, index) => {
-        const values = parseCsvLine(line)
+      .map((values, index) => {
         const getValue = (name: string) => values[headers.indexOf(name)] ?? ""
 
         const employeeId = getValue("employeeId")
@@ -464,10 +551,19 @@ export default function EmployeesPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleExport}>
-                <Download className="mr-2 h-4 w-4" />
-                Exporter
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Download className="mr-2 h-4 w-4" />
+                    Exporter
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => void handleExport("excel")}>Excel</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => void handleExport("csv")}>CSV</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => void handleExport("pdf")}>PDF</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button variant="outline" size="sm" onClick={handleImport}>
                 <Upload className="mr-2 h-4 w-4" />
                 Importer
@@ -475,7 +571,7 @@ export default function EmployeesPage() {
               <input
                 ref={importInputRef}
                 type="file"
-                accept=".csv"
+                accept=".csv,.xlsx,.xls"
                 className="hidden"
                 onChange={handleImportFile}
               />
