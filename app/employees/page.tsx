@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { ChangeEvent, useRef, useState } from "react"
 import { AppSidebar } from "@/components/dashboard/app-sidebar"
 import { Header } from "@/components/dashboard/header"
 import { EmployeeStats } from "@/components/employees/employee-stats"
@@ -217,6 +217,7 @@ export default function EmployeesPage() {
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
   const [employeeList, setEmployeeList] = useState<Employee[]>(employees)
+  const importInputRef = useRef<HTMLInputElement>(null)
 
   // Calculate stats
   const totalActive = employeeList.filter((e) => e.syncStatus === "synced").length
@@ -272,6 +273,177 @@ export default function EmployeesPage() {
     }
   }
 
+  const parseCsvLine = (line: string) => {
+    const result: string[] = []
+    let current = ""
+    let isInsideQuotes = false
+
+    for (let i = 0; i < line.length; i += 1) {
+      const char = line[i]
+
+      if (char === '"') {
+        if (isInsideQuotes && line[i + 1] === '"') {
+          current += '"'
+          i += 1
+        } else {
+          isInsideQuotes = !isInsideQuotes
+        }
+      } else if (char === "," && !isInsideQuotes) {
+        result.push(current)
+        current = ""
+      } else {
+        current += char
+      }
+    }
+
+    result.push(current)
+    return result
+  }
+
+  const csvEscape = (value: string) => {
+    if (value.includes(",") || value.includes('"') || value.includes("\n")) {
+      return `"${value.replaceAll('"', '""')}"`
+    }
+    return value
+  }
+
+  const handleExport = () => {
+    const headers = [
+      "employeeId",
+      "name",
+      "email",
+      "phone",
+      "department",
+      "position",
+      "cardNumber",
+      "accessGroups",
+      "syncStatus",
+      "hasFacePhoto",
+      "hasFingerprint",
+      "hireDate",
+      "lastAccess",
+    ]
+
+    const rows = filteredEmployees.map((employee) =>
+      [
+        employee.employeeId,
+        employee.name,
+        employee.email,
+        employee.phone,
+        employee.department,
+        employee.position,
+        employee.cardNumber,
+        employee.accessGroups.join("|"),
+        employee.syncStatus,
+        String(employee.biometricStatus.hasFacePhoto),
+        String(employee.biometricStatus.hasFingerprint),
+        employee.hireDate,
+        employee.lastAccess,
+      ]
+        .map((value) => csvEscape(value))
+        .join(",")
+    )
+
+    const csv = [headers.join(","), ...rows].join("\n")
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = "employees.csv"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  }
+
+  const handleImport = () => {
+    importInputRef.current?.click()
+  }
+
+  const handleImportFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+
+    if (!file) {
+      return
+    }
+
+    const csvContent = await file.text()
+    const lines = csvContent
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+
+    if (lines.length < 2) {
+      event.target.value = ""
+      return
+    }
+
+    const headers = parseCsvLine(lines[0])
+    const rows = lines.slice(1)
+
+    const importedEmployees = rows
+      .map((line, index) => {
+        const values = parseCsvLine(line)
+        const getValue = (name: string) => values[headers.indexOf(name)] ?? ""
+
+        const employeeId = getValue("employeeId")
+        const name = getValue("name")
+
+        if (!employeeId || !name) {
+          return null
+        }
+
+        return {
+          id: `imported-${employeeId}-${index}`,
+          employeeId,
+          name,
+          email: getValue("email"),
+          phone: getValue("phone"),
+          department: getValue("department") || "Unknown",
+          position: getValue("position") || "Employee",
+          photoUrl: "",
+          cardNumber: getValue("cardNumber"),
+          accessGroups: (getValue("accessGroups") || "")
+            .split("|")
+            .map((group) => group.trim())
+            .filter(Boolean),
+          syncStatus: (getValue("syncStatus") || "pending") as Employee["syncStatus"],
+          biometricStatus: {
+            hasFacePhoto: getValue("hasFacePhoto") === "true",
+            hasFingerprint: getValue("hasFingerprint") === "true",
+          },
+          hireDate: getValue("hireDate") || new Date().toISOString().slice(0, 10),
+          lastAccess: getValue("lastAccess") || "N/A",
+          accessLogs: [],
+        } as Employee
+      })
+      .filter((employee): employee is Employee => employee !== null)
+
+    if (importedEmployees.length > 0) {
+      setEmployeeList((prev) => {
+        const employeeMap = new Map(prev.map((employee) => [employee.employeeId, employee]))
+
+        importedEmployees.forEach((employee) => {
+          const existing = employeeMap.get(employee.employeeId)
+
+          if (existing) {
+            employeeMap.set(employee.employeeId, {
+              ...existing,
+              ...employee,
+              id: existing.id,
+            })
+          } else {
+            employeeMap.set(employee.employeeId, employee)
+          }
+        })
+
+        return Array.from(employeeMap.values())
+      })
+    }
+
+    event.target.value = ""
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <AppSidebar />
@@ -292,14 +464,21 @@ export default function EmployeesPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" onClick={handleExport}>
                 <Download className="mr-2 h-4 w-4" />
                 Exporter
               </Button>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" onClick={handleImport}>
                 <Upload className="mr-2 h-4 w-4" />
                 Importer
               </Button>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={handleImportFile}
+              />
               <Button
                 size="sm"
                 onClick={() => {
