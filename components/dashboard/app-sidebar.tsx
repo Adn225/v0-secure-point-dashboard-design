@@ -8,6 +8,8 @@ import {
   Cpu,
   BarChart3,
   Calendar,
+  CheckCheck,
+  Plane,
   Settings,
   Shield,
   ChevronDown,
@@ -19,10 +21,14 @@ import { useState } from "react"
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   {
-    name: "Employees",
+    name: "Person managements",
     href: "/employees",
     icon: Users,
-    children: [{ name: "Horaires et planning", href: "/employees/planning", icon: Calendar }],
+    children: [
+      { name: "Horaires et planning", href: "/employees/planning", icon: Calendar },
+      { name: "Approval", href: "/employees/approval", icon: CheckCheck },
+      { name: "Conges", href: "/employees/conges", icon: Plane },
+    ],
   },
   { name: "Access Logs", href: "/access-logs", icon: FileText },
   { name: "Devices", href: "/devices", icon: Cpu },
@@ -33,7 +39,7 @@ const navigation = [
 export function AppSidebar() {
   const pathname = usePathname()
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({
-    Employees: pathname === "/employees" || pathname === "/employees/planning",
+    "Person managements": pathname.startsWith("/employees"),
   })
 
   const toggleMenu = (menuName: string) => {
