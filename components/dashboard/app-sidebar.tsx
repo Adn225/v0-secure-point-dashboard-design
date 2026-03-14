@@ -15,7 +15,12 @@ import { usePathname } from "next/navigation"
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Employees", href: "/employees", icon: Users },
+  {
+    name: "Employees",
+    href: "/employees",
+    icon: Users,
+    children: [{ name: "Horaire et plannification", href: "/settings" }],
+  },
   { name: "Access Logs", href: "/access-logs", icon: FileText },
   { name: "Devices", href: "/devices", icon: Cpu },
   { name: "Reports", href: "/reports", icon: BarChart3 },
@@ -42,24 +47,47 @@ export function AppSidebar() {
         {navigation.map((item) => {
           const isActive = pathname === item.href
           return (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={cn(
-                "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all hover:bg-sidebar-accent",
-                isActive
-                  ? "bg-sidebar-accent text-primary"
-                  : "text-muted-foreground hover:text-sidebar-foreground"
-              )}
-            >
-              <item.icon
+            <div key={item.name}>
+              <Link
+                href={item.href}
                 className={cn(
-                  "h-5 w-5 shrink-0 transition-colors",
-                  isActive ? "text-primary" : "text-muted-foreground group-hover:text-sidebar-foreground"
+                  "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all hover:bg-sidebar-accent",
+                  isActive
+                    ? "bg-sidebar-accent text-primary"
+                    : "text-muted-foreground hover:text-sidebar-foreground"
                 )}
-              />
-              <span className="hidden lg:block">{item.name}</span>
-            </Link>
+              >
+                <item.icon
+                  className={cn(
+                    "h-5 w-5 shrink-0 transition-colors",
+                    isActive ? "text-primary" : "text-muted-foreground group-hover:text-sidebar-foreground"
+                  )}
+                />
+                <span className="hidden lg:block">{item.name}</span>
+              </Link>
+
+              {item.children?.length ? (
+                <div className="ml-11 mt-1 hidden space-y-1 lg:block">
+                  {item.children.map((child) => {
+                    const isChildActive = pathname === child.href
+                    return (
+                      <Link
+                        key={child.name}
+                        href={child.href}
+                        className={cn(
+                          "block rounded-md px-2 py-1.5 text-xs transition-all hover:bg-sidebar-accent",
+                          isChildActive
+                            ? "bg-sidebar-accent text-primary"
+                            : "text-muted-foreground hover:text-sidebar-foreground"
+                        )}
+                      >
+                        {child.name}
+                      </Link>
+                    )
+                  })}
+                </div>
+              ) : null}
+            </div>
           )
         })}
       </nav>
