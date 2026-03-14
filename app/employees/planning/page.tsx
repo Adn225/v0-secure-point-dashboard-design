@@ -18,7 +18,16 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { AlertTriangle, CalendarClock, Clock3, Edit, MoonStar, Plus, Trash2, UserRoundCog } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { AlertTriangle, CalendarClock, Clock3, Edit, MoonStar, Plus, Repeat2, Trash2, UserRoundCog } from "lucide-react"
+
+type RotationStep = {
+  id: string
+  label: string
+  startTime: string
+  endTime: string
+  durationDays: number
+}
 
 type WorkSchedule = {
   id: string
@@ -27,6 +36,8 @@ type WorkSchedule = {
   startTime: string
   endTime: string
   workDays: string[]
+  rotationEnabled: boolean
+  rotationSteps: RotationStep[]
 }
 
 type Assignment = {
@@ -60,10 +71,43 @@ const defaultGroups = [
   { id: "grp-003", name: "Parking" },
 ]
 
+const defaultRotationSteps: RotationStep[] = [
+  { id: "rot-1", label: "Matin", startTime: "07:00", endTime: "14:00", durationDays: 2 },
+  { id: "rot-2", label: "Après-midi", startTime: "14:00", endTime: "22:00", durationDays: 2 },
+  { id: "rot-3", label: "Nuit", startTime: "22:00", endTime: "07:00", durationDays: 2 },
+]
+
 const defaultSchedules: WorkSchedule[] = [
-  { id: "sch-001", name: "Bureau standard", type: "Horaire", startTime: "09:00", endTime: "18:00", workDays: ["Lun", "Mar", "Mer", "Jeu", "Ven"] },
-  { id: "sch-002", name: "Quart de nuit", type: "Quart", startTime: "22:00", endTime: "06:00", workDays: ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"] },
-  { id: "sch-003", name: "Repos week-end", type: "Repos", startTime: "00:00", endTime: "23:59", workDays: ["Sam", "Dim"] },
+  {
+    id: "sch-001",
+    name: "Bureau standard",
+    type: "Horaire",
+    startTime: "09:00",
+    endTime: "18:00",
+    workDays: ["Lun", "Mar", "Mer", "Jeu", "Ven"],
+    rotationEnabled: false,
+    rotationSteps: [],
+  },
+  {
+    id: "sch-002",
+    name: "Quart tournant 3x8",
+    type: "Quart",
+    startTime: "07:00",
+    endTime: "14:00",
+    workDays: ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"],
+    rotationEnabled: true,
+    rotationSteps: defaultRotationSteps,
+  },
+  {
+    id: "sch-003",
+    name: "Repos week-end",
+    type: "Repos",
+    startTime: "00:00",
+    endTime: "23:59",
+    workDays: ["Sam", "Dim"],
+    rotationEnabled: false,
+    rotationSteps: [],
+  },
 ]
 
 const defaultAssignments: Assignment[] = [
@@ -75,17 +119,38 @@ const planningTemplates = [
   {
     id: "tpl-admin",
     name: "Template administratif",
-    data: { type: "Horaire" as WorkSchedule["type"], startTime: "08:30", endTime: "17:30", workDays: ["Lun", "Mar", "Mer", "Jeu", "Ven"] },
+    data: {
+      type: "Horaire" as WorkSchedule["type"],
+      startTime: "08:30",
+      endTime: "17:30",
+      workDays: ["Lun", "Mar", "Mer", "Jeu", "Ven"],
+      rotationEnabled: false,
+      rotationSteps: [] as RotationStep[],
+    },
   },
   {
     id: "tpl-3x8",
-    name: "Template quart 3x8",
-    data: { type: "Quart" as WorkSchedule["type"], startTime: "22:00", endTime: "06:00", workDays: ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"] },
+    name: "Template quart tournant",
+    data: {
+      type: "Quart" as WorkSchedule["type"],
+      startTime: "07:00",
+      endTime: "14:00",
+      workDays: ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"],
+      rotationEnabled: true,
+      rotationSteps: defaultRotationSteps,
+    },
   },
   {
     id: "tpl-weekend",
     name: "Template repos week-end",
-    data: { type: "Repos" as WorkSchedule["type"], startTime: "00:00", endTime: "23:59", workDays: ["Sam", "Dim"] },
+    data: {
+      type: "Repos" as WorkSchedule["type"],
+      startTime: "00:00",
+      endTime: "23:59",
+      workDays: ["Sam", "Dim"],
+      rotationEnabled: false,
+      rotationSteps: [] as RotationStep[],
+    },
   },
 ]
 
@@ -94,6 +159,11 @@ const getTypeStyle = (type: WorkSchedule["type"]) => {
   if (type === "Quart") return "bg-violet-100 text-violet-800"
   return "bg-slate-100 text-slate-700"
 }
+
+const getRotationSummary = (steps: RotationStep[]) =>
+  steps.map((step) => `${step.durationDays}j ${step.startTime}-${step.endTime}`).join(" → ")
+
+const getRotationCycleDays = (steps: RotationStep[]) => steps.reduce((total, step) => total + step.durationDays, 0)
 
 export default function EmployeePlanningPage() {
   const [schedules, setSchedules] = useState(defaultSchedules)
@@ -107,7 +177,17 @@ export default function EmployeePlanningPage() {
     startTime: string
     endTime: string
     workDays: string[]
-  }>({ name: "", type: "Horaire", startTime: "09:00", endTime: "18:00", workDays: ["Lun", "Mar", "Mer", "Jeu", "Ven"] })
+    rotationEnabled: boolean
+    rotationSteps: RotationStep[]
+  }>({
+    name: "",
+    type: "Horaire",
+    startTime: "09:00",
+    endTime: "18:00",
+    workDays: ["Lun", "Mar", "Mer", "Jeu", "Ven"],
+    rotationEnabled: false,
+    rotationSteps: [],
+  })
 
   const [assignmentForm, setAssignmentForm] = useState({
     scheduleId: defaultSchedules[0].id,
@@ -125,14 +205,35 @@ export default function EmployeePlanningPage() {
   }, [schedules])
 
   const alerts = useMemo(() => {
-    return schedules.filter((schedule) => schedule.workDays.length === 0 || schedule.name.trim().length === 0)
+    return schedules.filter((schedule) => {
+      const missingBase = schedule.workDays.length === 0 || schedule.name.trim().length === 0
+      const brokenRotation =
+        schedule.type === "Quart" &&
+        schedule.rotationEnabled &&
+        (schedule.rotationSteps.length < 2 || schedule.rotationSteps.some((step) => step.durationDays <= 0))
+      return missingBase || brokenRotation
+    })
   }, [schedules])
 
   const resetScheduleForm = () =>
-    setScheduleForm({ name: "", type: "Horaire", startTime: "09:00", endTime: "18:00", workDays: ["Lun", "Mar", "Mer", "Jeu", "Ven"] })
+    setScheduleForm({
+      name: "",
+      type: "Horaire",
+      startTime: "09:00",
+      endTime: "18:00",
+      workDays: ["Lun", "Mar", "Mer", "Jeu", "Ven"],
+      rotationEnabled: false,
+      rotationSteps: [],
+    })
 
   const submitSchedule = () => {
-    if (!scheduleForm.name.trim() || scheduleForm.workDays.length === 0) return
+    const invalidRotation =
+      scheduleForm.type === "Quart" &&
+      scheduleForm.rotationEnabled &&
+      (scheduleForm.rotationSteps.length < 2 ||
+        scheduleForm.rotationSteps.some((step) => !step.label.trim() || step.durationDays <= 0))
+
+    if (!scheduleForm.name.trim() || scheduleForm.workDays.length === 0 || invalidRotation) return
 
     const payload: WorkSchedule = {
       id: editingSchedule?.id ?? `sch-${Date.now()}`,
@@ -141,6 +242,8 @@ export default function EmployeePlanningPage() {
       startTime: scheduleForm.startTime,
       endTime: scheduleForm.endTime,
       workDays: scheduleForm.workDays,
+      rotationEnabled: scheduleForm.rotationEnabled,
+      rotationSteps: scheduleForm.rotationEnabled ? scheduleForm.rotationSteps : [],
     }
 
     setSchedules((prev) =>
@@ -187,7 +290,7 @@ export default function EmployeePlanningPage() {
             <div>
               <h1 className="text-2xl font-semibold text-foreground">Horaires et plannings RH</h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                Organisation claire des horaires, repos et quarts pour faciliter la gestion d'équipes multi-sites.
+                Gestion simple des horaires fixes et des quarts tournants (ex: 2 jours 07h-14h puis 2 jours 14h-22h).
               </p>
             </div>
             <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm text-muted-foreground">
@@ -236,6 +339,8 @@ export default function EmployeePlanningPage() {
                         startTime: template.data.startTime,
                         endTime: template.data.endTime,
                         workDays: template.data.workDays,
+                        rotationEnabled: template.data.rotationEnabled,
+                        rotationSteps: template.data.rotationSteps,
                       }))
                     }
                   >
@@ -267,7 +372,7 @@ export default function EmployeePlanningPage() {
                       Nouveau planning
                     </Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>{editingSchedule ? "Modifier" : "Créer"} un planning</DialogTitle>
                       <DialogDescription>Créez un planning simple, lisible et applicable à plusieurs équipes.</DialogDescription>
@@ -285,7 +390,14 @@ export default function EmployeePlanningPage() {
                         <Label>Type</Label>
                         <Select
                           value={scheduleForm.type}
-                          onValueChange={(value: WorkSchedule["type"]) => setScheduleForm((p) => ({ ...p, type: value }))}
+                          onValueChange={(value: WorkSchedule["type"]) =>
+                            setScheduleForm((p) => ({
+                              ...p,
+                              type: value,
+                              rotationEnabled: value === "Quart" ? p.rotationEnabled : false,
+                              rotationSteps: value === "Quart" ? p.rotationSteps : [],
+                            }))
+                          }
                         >
                           <SelectTrigger>
                             <SelectValue />
@@ -297,6 +409,7 @@ export default function EmployeePlanningPage() {
                           </SelectContent>
                         </Select>
                       </div>
+
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-2">
                           <Label>Début</Label>
@@ -315,6 +428,123 @@ export default function EmployeePlanningPage() {
                           />
                         </div>
                       </div>
+
+                      {scheduleForm.type === "Quart" && (
+                        <div className="space-y-3 rounded-md border p-3">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <Label className="text-sm">Quart tournant</Label>
+                              <p className="text-xs text-muted-foreground">Activez si une équipe change de tranche horaire tous les X jours.</p>
+                            </div>
+                            <Switch
+                              checked={scheduleForm.rotationEnabled}
+                              onCheckedChange={(checked) =>
+                                setScheduleForm((prev) => ({
+                                  ...prev,
+                                  rotationEnabled: checked,
+                                  rotationSteps: checked && prev.rotationSteps.length < 2 ? defaultRotationSteps : prev.rotationSteps,
+                                }))
+                              }
+                            />
+                          </div>
+
+                          {scheduleForm.rotationEnabled && (
+                            <div className="space-y-2">
+                              <p className="text-xs text-muted-foreground">
+                                Exemple: 2 jours 07h-14h, 2 jours 14h-22h, puis rotation automatique.
+                              </p>
+                              {scheduleForm.rotationSteps.map((step, index) => (
+                                <div key={step.id} className="grid grid-cols-12 gap-2 rounded-md border p-2">
+                                  <Input
+                                    className="col-span-3"
+                                    value={step.label}
+                                    placeholder={`Phase ${index + 1}`}
+                                    onChange={(e) =>
+                                      setScheduleForm((prev) => ({
+                                        ...prev,
+                                        rotationSteps: prev.rotationSteps.map((item) =>
+                                          item.id === step.id ? { ...item, label: e.target.value } : item
+                                        ),
+                                      }))
+                                    }
+                                  />
+                                  <Input
+                                    className="col-span-3"
+                                    type="time"
+                                    value={step.startTime}
+                                    onChange={(e) =>
+                                      setScheduleForm((prev) => ({
+                                        ...prev,
+                                        rotationSteps: prev.rotationSteps.map((item) =>
+                                          item.id === step.id ? { ...item, startTime: e.target.value } : item
+                                        ),
+                                      }))
+                                    }
+                                  />
+                                  <Input
+                                    className="col-span-3"
+                                    type="time"
+                                    value={step.endTime}
+                                    onChange={(e) =>
+                                      setScheduleForm((prev) => ({
+                                        ...prev,
+                                        rotationSteps: prev.rotationSteps.map((item) =>
+                                          item.id === step.id ? { ...item, endTime: e.target.value } : item
+                                        ),
+                                      }))
+                                    }
+                                  />
+                                  <Input
+                                    className="col-span-2"
+                                    type="number"
+                                    min={1}
+                                    value={step.durationDays}
+                                    onChange={(e) =>
+                                      setScheduleForm((prev) => ({
+                                        ...prev,
+                                        rotationSteps: prev.rotationSteps.map((item) =>
+                                          item.id === step.id ? { ...item, durationDays: Number(e.target.value || 0) } : item
+                                        ),
+                                      }))
+                                    }
+                                  />
+                                  <Button
+                                    className="col-span-1"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() =>
+                                      setScheduleForm((prev) => ({
+                                        ...prev,
+                                        rotationSteps: prev.rotationSteps.filter((item) => item.id !== step.id),
+                                      }))
+                                    }
+                                    disabled={scheduleForm.rotationSteps.length <= 2}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              ))}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  setScheduleForm((prev) => ({
+                                    ...prev,
+                                    rotationSteps: [
+                                      ...prev.rotationSteps,
+                                      { id: `rot-${Date.now()}`, label: "Nouvelle phase", startTime: "07:00", endTime: "14:00", durationDays: 2 },
+                                    ],
+                                  }))
+                                }
+                              >
+                                <Plus className="mr-2 h-4 w-4" />
+                                Ajouter une phase
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       <div className="space-y-2">
                         <Label>Jours de travail</Label>
                         <div className="grid grid-cols-4 gap-2">
@@ -361,11 +591,22 @@ export default function EmployeePlanningPage() {
                     <div className="space-y-1">
                       <p className="font-medium">
                         {schedule.name} <Badge className={getTypeStyle(schedule.type)}>{schedule.type}</Badge>
+                        {schedule.rotationEnabled && (
+                          <Badge variant="outline" className="ml-2">
+                            <Repeat2 className="mr-1 h-3 w-3" />
+                            Tournant
+                          </Badge>
+                        )}
                       </p>
                       <p className="flex items-center gap-2 text-xs text-muted-foreground">
                         {schedule.type === "Quart" ? <MoonStar className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
                         {schedule.startTime} - {schedule.endTime}
                       </p>
+                      {schedule.rotationEnabled && schedule.rotationSteps.length > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          Rotation: {getRotationSummary(schedule.rotationSteps)} (cycle {getRotationCycleDays(schedule.rotationSteps)} jours)
+                        </p>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <Button
@@ -379,6 +620,8 @@ export default function EmployeePlanningPage() {
                             startTime: schedule.startTime,
                             endTime: schedule.endTime,
                             workDays: schedule.workDays,
+                            rotationEnabled: schedule.rotationEnabled,
+                            rotationSteps: schedule.rotationSteps,
                           })
                           setScheduleDialogOpen(true)
                         }}
@@ -452,7 +695,7 @@ export default function EmployeePlanningPage() {
               {alerts.length > 0 && (
                 <div className="flex items-start gap-2 rounded-md border border-amber-400/40 bg-amber-50 p-3 text-amber-900">
                   <AlertTriangle className="mt-0.5 h-4 w-4" />
-                  <p className="text-sm">Certains plannings doivent être complétés (nom ou jours manquants) avant diffusion.</p>
+                  <p className="text-sm">Certains plannings doivent être complétés (nom, jours ou cycle de rotation) avant diffusion.</p>
                 </div>
               )}
 
@@ -487,7 +730,9 @@ export default function EmployeePlanningPage() {
                   {weekDays.map((day) => (
                     <div key={day} className="rounded-md border bg-muted/30 p-2 text-xs">
                       <p className="font-semibold">{dayLabels[day]}</p>
-                      <p className="text-muted-foreground">{assignments.filter((asgn) => schedules.find((schedule) => schedule.id === asgn.scheduleId)?.workDays.includes(day)).length} affectation(s)</p>
+                      <p className="text-muted-foreground">
+                        {assignments.filter((asgn) => schedules.find((schedule) => schedule.id === asgn.scheduleId)?.workDays.includes(day)).length} affectation(s)
+                      </p>
                     </div>
                   ))}
                 </div>
