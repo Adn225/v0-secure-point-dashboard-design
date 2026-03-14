@@ -7,6 +7,7 @@ import {
   FileText,
   Cpu,
   BarChart3,
+  Calendar,
   Settings,
   Shield,
   ChevronDown,
@@ -21,7 +22,7 @@ const navigation = [
     name: "Employees",
     href: "/employees",
     icon: Users,
-    children: [{ name: "Horaires et planning", href: "/employees/planning" }],
+    children: [{ name: "Horaires et planning", href: "/employees/planning", icon: Calendar }],
   },
   { name: "Access Logs", href: "/access-logs", icon: FileText },
   { name: "Devices", href: "/devices", icon: Cpu },
@@ -104,12 +105,13 @@ export function AppSidebar() {
                         key={child.name}
                         href={child.href}
                         className={cn(
-                          "block rounded-md px-2 py-1.5 text-xs transition-all hover:bg-sidebar-accent",
+                          "flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-all hover:bg-sidebar-accent",
                           isChildActive
                             ? "bg-sidebar-accent text-primary"
                             : "text-muted-foreground hover:text-sidebar-foreground"
                         )}
                       >
+                        {child.icon ? <child.icon className="h-3.5 w-3.5 shrink-0" /> : null}
                         {child.name}
                       </Link>
                     )
