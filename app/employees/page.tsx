@@ -543,7 +543,7 @@ export default function EmployeesPage() {
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-2xl font-semibold text-foreground">
-                Employes <span className="text-muted-foreground">({employeeList.length})</span>
+                Person managements <span className="text-muted-foreground">({employeeList.length})</span>
               </h1>
               <p className="mt-1 text-sm text-muted-foreground">
                 Gestion des employes et synchronisation HikCentral
