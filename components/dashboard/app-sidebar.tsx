@@ -21,7 +21,7 @@ const navigation = [
     name: "Employees",
     href: "/employees",
     icon: Users,
-    children: [{ name: "Horaire et plannification", href: "/settings" }],
+    children: [{ name: "Horaires et planning", href: "/employees/planning" }],
   },
   { name: "Access Logs", href: "/access-logs", icon: FileText },
   { name: "Devices", href: "/devices", icon: Cpu },
@@ -32,7 +32,7 @@ const navigation = [
 export function AppSidebar() {
   const pathname = usePathname()
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({
-    Employees: pathname === "/employees" || pathname === "/settings",
+    Employees: pathname === "/employees" || pathname === "/employees/planning",
   })
 
   const toggleMenu = (menuName: string) => {
