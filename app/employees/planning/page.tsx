@@ -18,7 +18,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { CalendarDays, Edit, Plus, Trash2 } from "lucide-react"
+import { AlertTriangle, CalendarClock, Clock3, Edit, MoonStar, Plus, Trash2, UserRoundCog } from "lucide-react"
 
 type WorkSchedule = {
   id: string
@@ -26,38 +26,74 @@ type WorkSchedule = {
   type: "Horaire" | "Quart" | "Repos"
   startTime: string
   endTime: string
-  workDays: string
+  workDays: string[]
 }
 
 type Assignment = {
   id: string
   scheduleId: string
-  targetType: "Departement" | "Groupe"
+  targetType: "Département" | "Groupe"
   targetId: string
+}
+
+const weekDays = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
+
+const dayLabels: Record<string, string> = {
+  Lun: "Lundi",
+  Mar: "Mardi",
+  Mer: "Mercredi",
+  Jeu: "Jeudi",
+  Ven: "Vendredi",
+  Sam: "Samedi",
+  Dim: "Dimanche",
 }
 
 const defaultDepartments = [
   { id: "dep-001", name: "IT" },
-  { id: "dep-002", name: "RH" },
-  { id: "dep-003", name: "Operations" },
+  { id: "dep-002", name: "Ressources humaines" },
+  { id: "dep-003", name: "Opérations" },
 ]
 
 const defaultGroups = [
-  { id: "grp-001", name: "Batiment A" },
+  { id: "grp-001", name: "Bâtiment A" },
   { id: "grp-002", name: "Salle serveur" },
   { id: "grp-003", name: "Parking" },
 ]
 
 const defaultSchedules: WorkSchedule[] = [
-  { id: "sch-001", name: "Bureau standard", type: "Horaire", startTime: "09:00", endTime: "18:00", workDays: "Lun-Ven" },
-  { id: "sch-002", name: "Quart nuit", type: "Quart", startTime: "22:00", endTime: "06:00", workDays: "Lun-Sam" },
-  { id: "sch-003", name: "Repos weekend", type: "Repos", startTime: "00:00", endTime: "23:59", workDays: "Sam-Dim" },
+  { id: "sch-001", name: "Bureau standard", type: "Horaire", startTime: "09:00", endTime: "18:00", workDays: ["Lun", "Mar", "Mer", "Jeu", "Ven"] },
+  { id: "sch-002", name: "Quart de nuit", type: "Quart", startTime: "22:00", endTime: "06:00", workDays: ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"] },
+  { id: "sch-003", name: "Repos week-end", type: "Repos", startTime: "00:00", endTime: "23:59", workDays: ["Sam", "Dim"] },
 ]
 
 const defaultAssignments: Assignment[] = [
-  { id: "asg-001", scheduleId: "sch-001", targetType: "Departement", targetId: "dep-001" },
+  { id: "asg-001", scheduleId: "sch-001", targetType: "Département", targetId: "dep-001" },
   { id: "asg-002", scheduleId: "sch-002", targetType: "Groupe", targetId: "grp-002" },
 ]
+
+const planningTemplates = [
+  {
+    id: "tpl-admin",
+    name: "Template administratif",
+    data: { type: "Horaire" as WorkSchedule["type"], startTime: "08:30", endTime: "17:30", workDays: ["Lun", "Mar", "Mer", "Jeu", "Ven"] },
+  },
+  {
+    id: "tpl-3x8",
+    name: "Template quart 3x8",
+    data: { type: "Quart" as WorkSchedule["type"], startTime: "22:00", endTime: "06:00", workDays: ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"] },
+  },
+  {
+    id: "tpl-weekend",
+    name: "Template repos week-end",
+    data: { type: "Repos" as WorkSchedule["type"], startTime: "00:00", endTime: "23:59", workDays: ["Sam", "Dim"] },
+  },
+]
+
+const getTypeStyle = (type: WorkSchedule["type"]) => {
+  if (type === "Horaire") return "bg-emerald-100 text-emerald-800"
+  if (type === "Quart") return "bg-violet-100 text-violet-800"
+  return "bg-slate-100 text-slate-700"
+}
 
 export default function EmployeePlanningPage() {
   const [schedules, setSchedules] = useState(defaultSchedules)
@@ -70,26 +106,37 @@ export default function EmployeePlanningPage() {
     type: WorkSchedule["type"]
     startTime: string
     endTime: string
-    workDays: string
-  }>({ name: "", type: "Horaire", startTime: "09:00", endTime: "18:00", workDays: "Lun-Ven" })
+    workDays: string[]
+  }>({ name: "", type: "Horaire", startTime: "09:00", endTime: "18:00", workDays: ["Lun", "Mar", "Mer", "Jeu", "Ven"] })
 
   const [assignmentForm, setAssignmentForm] = useState({
     scheduleId: defaultSchedules[0].id,
-    targetType: "Departement" as Assignment["targetType"],
+    targetType: "Département" as Assignment["targetType"],
     targetId: defaultDepartments[0].id,
   })
 
   const availableTargets = useMemo(() => {
-    return assignmentForm.targetType === "Departement" ? defaultDepartments : defaultGroups
+    return assignmentForm.targetType === "Département" ? defaultDepartments : defaultGroups
   }, [assignmentForm.targetType])
 
+  const planningCoverage = useMemo(() => {
+    const daysWithPlanning = new Set(schedules.flatMap((schedule) => schedule.workDays))
+    return Math.round((daysWithPlanning.size / weekDays.length) * 100)
+  }, [schedules])
+
+  const alerts = useMemo(() => {
+    return schedules.filter((schedule) => schedule.workDays.length === 0 || schedule.name.trim().length === 0)
+  }, [schedules])
+
   const resetScheduleForm = () =>
-    setScheduleForm({ name: "", type: "Horaire", startTime: "09:00", endTime: "18:00", workDays: "Lun-Ven" })
+    setScheduleForm({ name: "", type: "Horaire", startTime: "09:00", endTime: "18:00", workDays: ["Lun", "Mar", "Mer", "Jeu", "Ven"] })
 
   const submitSchedule = () => {
+    if (!scheduleForm.name.trim() || scheduleForm.workDays.length === 0) return
+
     const payload: WorkSchedule = {
       id: editingSchedule?.id ?? `sch-${Date.now()}`,
-      name: scheduleForm.name,
+      name: scheduleForm.name.trim(),
       type: scheduleForm.type,
       startTime: scheduleForm.startTime,
       endTime: scheduleForm.endTime,
@@ -108,10 +155,23 @@ export default function EmployeePlanningPage() {
   const deleteSchedule = (id: string) => {
     setSchedules((prev) => prev.filter((schedule) => schedule.id !== id))
     setAssignments((prev) => prev.filter((asgn) => asgn.scheduleId !== id))
+    if (assignmentForm.scheduleId === id) {
+      const fallback = schedules.find((schedule) => schedule.id !== id)
+      setAssignmentForm((prev) => ({ ...prev, scheduleId: fallback?.id ?? "" }))
+    }
   }
 
   const addAssignment = () => {
     if (!assignmentForm.scheduleId || !assignmentForm.targetId) return
+
+    const duplicate = assignments.some(
+      (asgn) =>
+        asgn.scheduleId === assignmentForm.scheduleId &&
+        asgn.targetType === assignmentForm.targetType &&
+        asgn.targetId === assignmentForm.targetId
+    )
+    if (duplicate) return
+
     setAssignments((prev) => [...prev, { id: `asg-${Date.now()}`, ...assignmentForm }])
   }
 
@@ -123,41 +183,115 @@ export default function EmployeePlanningPage() {
         <Header systemStatus="connected" />
 
         <main className="space-y-6 p-6">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">Horaires et planning</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Gestion des horaires, quarts, repos et affectations.</p>
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold text-foreground">Horaires et plannings RH</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Organisation claire des horaires, repos et quarts pour faciliter la gestion d'équipes multi-sites.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm text-muted-foreground">
+              <CalendarClock className="h-4 w-4 text-primary" />
+              Couverture hebdomadaire: <span className="font-semibold text-foreground">{planningCoverage}%</span>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Vue d'ensemble</CardTitle>
+                <CardDescription>Indicateurs clés pour pilotage RH</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="flex items-center justify-between rounded-md border p-2">
+                  <span>Plannings actifs</span>
+                  <Badge variant="secondary">{schedules.length}</Badge>
+                </div>
+                <div className="flex items-center justify-between rounded-md border p-2">
+                  <span>Affectations en place</span>
+                  <Badge variant="secondary">{assignments.length}</Badge>
+                </div>
+                <div className="flex items-center justify-between rounded-md border p-2">
+                  <span>Alertes qualité</span>
+                  <Badge variant={alerts.length ? "destructive" : "secondary"}>{alerts.length}</Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="lg:col-span-2">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Templates rapides</CardTitle>
+                <CardDescription>Appliquez une structure de planning standard en un clic</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-2 sm:grid-cols-3">
+                {planningTemplates.map((template) => (
+                  <Button
+                    key={template.id}
+                    variant="outline"
+                    className="justify-start"
+                    onClick={() =>
+                      setScheduleForm((prev) => ({
+                        ...prev,
+                        type: template.data.type,
+                        startTime: template.data.startTime,
+                        endTime: template.data.endTime,
+                        workDays: template.data.workDays,
+                      }))
+                    }
+                  >
+                    <Clock3 className="mr-2 h-4 w-4" />
+                    {template.name}
+                  </Button>
+                ))}
+              </CardContent>
+            </Card>
           </div>
 
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-base">Horaires, repos et quarts</CardTitle>
-                  <CardDescription>Definition des plages de travail et types de planning</CardDescription>
+                  <CardTitle className="text-base">Bibliothèque de plannings</CardTitle>
+                  <CardDescription>Définissez des plages de travail normalisées et faciles à maintenir</CardDescription>
                 </div>
                 <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button size="sm" onClick={() => { setEditingSchedule(null); resetScheduleForm() }}>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setEditingSchedule(null)
+                        resetScheduleForm()
+                      }}
+                    >
                       <Plus className="mr-2 h-4 w-4" />
                       Nouveau planning
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>{editingSchedule ? "Modifier" : "Creer"} un planning</DialogTitle>
-                      <DialogDescription>Renseignez les details de ce planning.</DialogDescription>
+                      <DialogTitle>{editingSchedule ? "Modifier" : "Créer"} un planning</DialogTitle>
+                      <DialogDescription>Créez un planning simple, lisible et applicable à plusieurs équipes.</DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                       <div className="space-y-2">
-                        <Label>Nom</Label>
-                        <Input value={scheduleForm.name} onChange={(e) => setScheduleForm((p) => ({ ...p, name: e.target.value }))} />
+                        <Label>Nom du planning</Label>
+                        <Input
+                          value={scheduleForm.name}
+                          onChange={(e) => setScheduleForm((p) => ({ ...p, name: e.target.value }))}
+                          placeholder="Ex: Équipe accueil matin"
+                        />
                       </div>
                       <div className="space-y-2">
                         <Label>Type</Label>
-                        <Select value={scheduleForm.type} onValueChange={(value: WorkSchedule["type"]) => setScheduleForm((p) => ({ ...p, type: value }))}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
+                        <Select
+                          value={scheduleForm.type}
+                          onValueChange={(value: WorkSchedule["type"]) => setScheduleForm((p) => ({ ...p, type: value }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="Horaire">Horaire</SelectItem>
+                            <SelectItem value="Horaire">Horaire fixe</SelectItem>
                             <SelectItem value="Quart">Quart</SelectItem>
                             <SelectItem value="Repos">Repos</SelectItem>
                           </SelectContent>
@@ -165,22 +299,56 @@ export default function EmployeePlanningPage() {
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-2">
-                          <Label>Debut</Label>
-                          <Input type="time" value={scheduleForm.startTime} onChange={(e) => setScheduleForm((p) => ({ ...p, startTime: e.target.value }))} />
+                          <Label>Début</Label>
+                          <Input
+                            type="time"
+                            value={scheduleForm.startTime}
+                            onChange={(e) => setScheduleForm((p) => ({ ...p, startTime: e.target.value }))}
+                          />
                         </div>
                         <div className="space-y-2">
                           <Label>Fin</Label>
-                          <Input type="time" value={scheduleForm.endTime} onChange={(e) => setScheduleForm((p) => ({ ...p, endTime: e.target.value }))} />
+                          <Input
+                            type="time"
+                            value={scheduleForm.endTime}
+                            onChange={(e) => setScheduleForm((p) => ({ ...p, endTime: e.target.value }))}
+                          />
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <Label>Jours</Label>
-                        <Input value={scheduleForm.workDays} onChange={(e) => setScheduleForm((p) => ({ ...p, workDays: e.target.value }))} placeholder="Ex: Lun-Ven" />
+                        <Label>Jours de travail</Label>
+                        <div className="grid grid-cols-4 gap-2">
+                          {weekDays.map((day) => {
+                            const selected = scheduleForm.workDays.includes(day)
+                            return (
+                              <Button
+                                key={day}
+                                type="button"
+                                variant={selected ? "default" : "outline"}
+                                size="sm"
+                                onClick={() =>
+                                  setScheduleForm((prev) => ({
+                                    ...prev,
+                                    workDays: selected
+                                      ? prev.workDays.filter((item) => item !== day)
+                                      : [...prev.workDays, day],
+                                  }))
+                                }
+                              >
+                                {day}
+                              </Button>
+                            )
+                          })}
+                        </div>
                       </div>
                     </div>
                     <DialogFooter>
-                      <Button variant="outline" onClick={() => setScheduleDialogOpen(false)}>Annuler</Button>
-                      <Button onClick={submitSchedule}>Enregistrer</Button>
+                      <Button variant="outline" onClick={() => setScheduleDialogOpen(false)}>
+                        Annuler
+                      </Button>
+                      <Button onClick={submitSchedule} disabled={!scheduleForm.name.trim() || scheduleForm.workDays.length === 0}>
+                        Enregistrer
+                      </Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
@@ -188,21 +356,52 @@ export default function EmployeePlanningPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {schedules.map((schedule) => (
-                <div key={schedule.id} className="flex items-center justify-between rounded-lg border p-4">
-                  <div className="flex items-center gap-3">
-                    <CalendarDays className="h-5 w-5 text-primary" />
-                    <div>
-                      <p className="font-medium">{schedule.name} <Badge variant="secondary">{schedule.type}</Badge></p>
-                      <p className="text-xs text-muted-foreground">{schedule.startTime} - {schedule.endTime} • {schedule.workDays}</p>
+                <div key={schedule.id} className="space-y-3 rounded-lg border p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-1">
+                      <p className="font-medium">
+                        {schedule.name} <Badge className={getTypeStyle(schedule.type)}>{schedule.type}</Badge>
+                      </p>
+                      <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {schedule.type === "Quart" ? <MoonStar className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
+                        {schedule.startTime} - {schedule.endTime}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setEditingSchedule(schedule)
+                          setScheduleForm({
+                            name: schedule.name,
+                            type: schedule.type,
+                            startTime: schedule.startTime,
+                            endTime: schedule.endTime,
+                            workDays: schedule.workDays,
+                          })
+                          setScheduleDialogOpen(true)
+                        }}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="text-destructive" onClick={() => deleteSchedule(schedule.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => {
-                      setEditingSchedule(schedule)
-                      setScheduleForm({ name: schedule.name, type: schedule.type, startTime: schedule.startTime, endTime: schedule.endTime, workDays: schedule.workDays })
-                      setScheduleDialogOpen(true)
-                    }}><Edit className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" className="text-destructive" onClick={() => deleteSchedule(schedule.id)}><Trash2 className="h-4 w-4" /></Button>
+                  <div className="grid grid-cols-7 gap-2">
+                    {weekDays.map((day) => {
+                      const isActive = schedule.workDays.includes(day)
+                      return (
+                        <div
+                          key={`${schedule.id}-${day}`}
+                          className={`rounded-md border px-2 py-1 text-center text-xs ${isActive ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground"}`}
+                        >
+                          {day}
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               ))}
@@ -211,48 +410,87 @@ export default function EmployeePlanningPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Attribution des plannings</CardTitle>
-              <CardDescription>Affectez un planning a un departement ou un groupe</CardDescription>
+              <CardTitle className="text-base">Affectation des plannings</CardTitle>
+              <CardDescription>Associez un planning à un département ou à un groupe opérationnel</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3 md:grid-cols-4">
                 <Select value={assignmentForm.scheduleId} onValueChange={(v) => setAssignmentForm((p) => ({ ...p, scheduleId: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Planning" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Planning" />
+                  </SelectTrigger>
                   <SelectContent>{schedules.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
                 </Select>
-                <Select value={assignmentForm.targetType} onValueChange={(v: Assignment["targetType"]) => setAssignmentForm((p) => ({ ...p, targetType: v, targetId: "" }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Select
+                  value={assignmentForm.targetType}
+                  onValueChange={(v: Assignment["targetType"]) => setAssignmentForm((p) => ({ ...p, targetType: v, targetId: "" }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Departement">Departement</SelectItem>
+                    <SelectItem value="Département">Département</SelectItem>
                     <SelectItem value="Groupe">Groupe</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={assignmentForm.targetId} onValueChange={(v) => setAssignmentForm((p) => ({ ...p, targetId: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Selectionner" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner" />
+                  </SelectTrigger>
                   <SelectContent>
                     {availableTargets.map((target) => (
                       <SelectItem key={target.id} value={target.id}>{target.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <Button onClick={addAssignment}>Attribuer</Button>
+                <Button onClick={addAssignment}>
+                  <UserRoundCog className="mr-2 h-4 w-4" />
+                  Attribuer
+                </Button>
               </div>
+
+              {alerts.length > 0 && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-400/40 bg-amber-50 p-3 text-amber-900">
+                  <AlertTriangle className="mt-0.5 h-4 w-4" />
+                  <p className="text-sm">Certains plannings doivent être complétés (nom ou jours manquants) avant diffusion.</p>
+                </div>
+              )}
 
               <div className="space-y-2">
                 {assignments.map((asgn) => {
                   const schedule = schedules.find((s) => s.id === asgn.scheduleId)
-                  const target = asgn.targetType === "Departement" ? defaultDepartments.find((d) => d.id === asgn.targetId) : defaultGroups.find((g) => g.id === asgn.targetId)
+                  const target =
+                    asgn.targetType === "Département"
+                      ? defaultDepartments.find((d) => d.id === asgn.targetId)
+                      : defaultGroups.find((g) => g.id === asgn.targetId)
                   return (
                     <div key={asgn.id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
                       <p>
-                        <span className="font-medium">{schedule?.name ?? "Planning supprime"}</span> → {asgn.targetType}: {target?.name ?? "Cible supprimee"}
+                        <span className="font-medium">{schedule?.name ?? "Planning supprimé"}</span> → {asgn.targetType}: {target?.name ?? "Cible supprimée"}
                       </p>
-                      <Button variant="ghost" size="icon" className="text-destructive" onClick={() => setAssignments((prev) => prev.filter((a) => a.id !== asgn.id))}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive"
+                        onClick={() => setAssignments((prev) => prev.filter((a) => a.id !== asgn.id))}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   )
                 })}
+              </div>
+
+              <div className="rounded-md border p-3">
+                <p className="mb-2 text-sm font-medium">Lecture visuelle des jours</p>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+                  {weekDays.map((day) => (
+                    <div key={day} className="rounded-md border bg-muted/30 p-2 text-xs">
+                      <p className="font-semibold">{dayLabels[day]}</p>
+                      <p className="text-muted-foreground">{assignments.filter((asgn) => schedules.find((schedule) => schedule.id === asgn.scheduleId)?.workDays.includes(day)).length} affectation(s)</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </CardContent>
           </Card>
