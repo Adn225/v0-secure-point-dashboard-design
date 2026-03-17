@@ -21,10 +21,11 @@ import { useState } from "react"
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   {
-    name: "Person managements",
+    name: "Person management",
     href: "/employees",
     icon: Users,
     children: [
+      { name: "Person", href: "/employees", icon: Users },
       { name: "Horaires et planning", href: "/employees/planning", icon: Calendar },
       { name: "Approval", href: "/employees/approval", icon: CheckCheck },
       { name: "Conges", href: "/employees/conges", icon: Plane },
@@ -39,7 +40,7 @@ const navigation = [
 export function AppSidebar() {
   const pathname = usePathname()
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({
-    "Person managements": pathname.startsWith("/employees"),
+    "Person management": pathname.startsWith("/employees"),
   })
 
   const toggleMenu = (menuName: string) => {
